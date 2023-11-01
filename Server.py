@@ -3,7 +3,7 @@ from _thread import *
 import sys
 from PyQt5.QtWidgets import *
 
-class MyWindow(QMainWindow):
+class MyWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setGeometry(300, 300, 400, 300)
