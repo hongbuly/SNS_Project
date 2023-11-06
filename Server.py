@@ -2,12 +2,14 @@ import socket
 from _thread import *
 import sys
 from PyQt5.QtWidgets import *
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt
 
 class MyWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setGeometry(300, 300, 400, 300)
-
+        self.setGeometry(300, 300, 400, 400)
+        
         self.count = 0
         btn_socket = QPushButton("Socket", self)
         btn_socket.clicked.connect(self.btn_socket_clicked)
@@ -23,6 +25,7 @@ class MyWindow(QWidget):
         layout.addWidget(btn_socket)
         layout.addWidget(btn_bind)
         layout.addWidget(btn_listen)
+        layout.addWidget(btn_waiting)
         layout.addStretch(1)
         self.setLayout(layout)
 
@@ -31,6 +34,29 @@ class MyWindow(QWidget):
         ## Server IP and Port ##
         self.HOST = "127.0.0.1" # socket.gethostbyname(socket.gethostname())
         self.PORT = 9999
+
+        # 서버 아이콘 표시를 위한 QLabel 위젯 생성
+        cloud_pixmap = QPixmap('./Images/cloud.png')
+        cloud_scaled_pixmap = cloud_pixmap.scaled(50, 50)  # 원하는 크기로 조절
+        self.server_label = QLabel(self)
+        self.server_label.setPixmap(cloud_scaled_pixmap)
+        self.server_label.setGeometry(25, 100, 50, 50)
+        # ip/port를 보여줄 텍스트 
+        self.serverT_label = QLabel(self)
+        self.serverT_label.setText("<b>Server</b>")
+        self.serverT_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 가운데 정렬
+        self.serverT_label.setGeometry(25, 125, 50, 50)  # 위치 및 크기 조절
+        
+        # 소켓 아이콘 표시를 위한 QLabel 위젯 생성
+        doorC_pixmap = QPixmap('./Images/door_close.png')
+        doorC_scaled_pixmap = doorC_pixmap.scaled(50, 50)  # 원하는 크기로 조절
+        self.socket_label = QLabel(self)
+        self.socket_label.setPixmap(doorC_scaled_pixmap)
+        self.socket_label.setGeometry(25, 55, 50, 50)
+        self.socket_label.setVisible(False)
+
+        # ip/port를 보여줄 텍스트 
+        self.IP_PORT_label = QLabel(self)
     
     def btn_socket_clicked(self):
         if self.count == 0:
@@ -38,12 +64,18 @@ class MyWindow(QWidget):
             print('>> Server Start with ip :', self.HOST)
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket_label.setVisible(True)  # 초기에는 아이콘 숨김
 
     def btn_bind_clicked(self):
         if self.count == 1:
             self.count += 1
             self.server_socket.bind((self.HOST, self.PORT))
 
+            combined_text = "<b>IP :" + self.HOST + "<br>Port : "+ str(self.PORT) + "</b>"
+            self.IP_PORT_label.setText(combined_text)
+            self.IP_PORT_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 가운데 정렬
+            self.IP_PORT_label.setGeometry(10, 20, 100, 30)  # 위치 및 크기 조절
+            
     def btn_listen_clicked(self):
         if self.count == 2:
             self.count += 1
