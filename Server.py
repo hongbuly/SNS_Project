@@ -19,15 +19,15 @@ class MyWindow(QWidget):
         btn_bind.clicked.connect(self.btn_bind_clicked)
         btn_listen = QPushButton("Listen", self)
         btn_listen.clicked.connect(self.btn_listen_clicked)
-        btn_send = QPushButton("Send", self)
-        btn_send.clicked.connect(self.btn_send_clicked)
+        self.btn_send = QPushButton("Send", self)
+        self.btn_send.clicked.connect(self.btn_send_clicked)
 
         hbox = QHBoxLayout()
         hbox.addStretch(1)
         hbox.addWidget(btn_socket)
         hbox.addWidget(btn_bind)
         hbox.addWidget(btn_listen)
-        hbox.addWidget(btn_send)
+        hbox.addWidget(self.btn_send)
         hbox.addStretch(1)
 
         # 메시지 출력란
@@ -132,6 +132,21 @@ class MyWindow(QWidget):
         self.message_anim = QPropertyAnimation(self.message_label, b"pos")
         self.message_anim.setEndValue(QPoint(70, 90))
         self.message_anim.setDuration(1500)
+
+        # send 버튼 클릭 시 나타나는 gif
+        self.sendLabel = QLabel(self)
+        self.sendLabel.setGeometry(160, 140, 100, 100)
+        self.sendgif = QMovie('image/send.gif')
+        self.sendgif.setScaledSize(self.sendLabel.size())
+        self.sendLabel.setMovie(self.sendgif)
+
+        self.sendTarget = '' # 메시지 보낼 대상
+
+        # 서버 쪽 message 아이콘
+        self.recvLabel = QLabel(self)
+        self.recvLabel.setPixmap(message_r_scaled_pixmap)
+        self.recvLabel.setGeometry(100, 90, 30, 30)
+        self.recvLabel.setVisible(False)
     
     def show_and_hide(self):    #loading gif를 화면에 띄우고 숨기는 함수
         if self.show_gif:
@@ -170,7 +185,25 @@ class MyWindow(QWidget):
             start_new_thread(self.btn_waiting_clicked,())   #waiting동안 동시에 loading gif를 보여야 하므로 thread로 분리
 
     def btn_send_clicked(self):
-        print("아직 구현 중")
+        # self.recvLabel.setVisible(False) # 서버(보내는 사람)쪽 아이콘 안보임
+        # self.message_label.setVisible(True) # 클라이언트(받는 사람)쪽 아이콘 보임
+        
+        # send 버튼 짧은 주기로 여러 번 누르는 것 방지. 3초동안 버튼 비활성화
+        self.btn_send.setEnabled(False)
+        QTimer.singleShot(3000, lambda: self.btn_send.setDisabled(False))
+
+        # 클라이언트에게 데이터 보내기
+        temp_str = self.input_box.text()
+        send_data = bytearray(temp_str, 'utf-8')
+        try:
+            self.sendTarget.send(send_data)
+            # 편지가 지나가는 gif 실행
+            self.sendgif.start()
+            QTimer.singleShot(2000, lambda: self.sendLabel.setDisabled(False))
+            QTimer.singleShot(2000, lambda: self.sendgif.stop())
+            self.message_display.append("나: " + temp_str)
+        except:
+            print("메시지를 전달할 대상이 없습니다.")
     
     def hide_client(self):
         self.client_label.setVisible(False)
@@ -224,6 +257,7 @@ class MyWindow(QWidget):
                     print('>> Wait')
                     client_socket, addr = self.server_socket.accept()
                     self.client_sockets.append(client_socket)
+                    self.sendTarget = client_socket
                     print("참가자 수 : ", len(self.client_sockets))
                     start_new_thread(self.threaded, (client_socket, addr))
                     self.show_client()
