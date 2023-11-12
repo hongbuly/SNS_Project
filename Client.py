@@ -36,11 +36,13 @@ class MyWindow(QWidget):
         self.HOST = '127.0.0.1'
         self.PORT = 9999
 
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_socket.connect((self.HOST, self.PORT))
-        print('>> Connect Server')
-        start_new_thread(self.recv_data, (self.client_socket,))
-        
+        try:
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket.connect((self.HOST, self.PORT))
+            print('>> Connect Server')
+            start_new_thread(self.recv_data, (self.client_socket,))
+        except:
+            print('>> Server is closed')
 
     def send_message(self):
         message = self.input_box.text()
