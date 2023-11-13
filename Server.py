@@ -134,24 +134,24 @@ class MyWindow(QWidget):
         self.message_anim.setDuration(1500)
 
         # message가 오는 에니메이션
-        self.message_anim = QPropertyAnimation(self.message_label, b"pos")
-        self.message_anim.setStartValue(QPoint(70, 90))
-        self.message_anim.setEndValue(QPoint(270, 90))
-        self.message_anim.setDuration(1500)
+        self.message_anim2 = QPropertyAnimation(self.message_label, b"pos")
+        self.message_anim2.setStartValue(QPoint(70, 90))
+        self.message_anim2.setEndValue(QPoint(270, 90))
+        self.message_anim2.setDuration(1500)
 
-        # send 버튼 클릭 시 나타나는 gif
-        self.sendLabel = QLabel(self)
-        self.sendLabel.setGeometry(160, 140, 100, 100)
-        self.sendgif = QMovie('Images/send.gif')
-        self.sendgif.setScaledSize(self.sendLabel.size())
-        self.sendLabel.setMovie(self.sendgif)
+        # # send 버튼 클릭 시 나타나는 gif
+        # self.sendLabel = QLabel(self)
+        # self.sendLabel.setGeometry(160, 140, 100, 100)
+        # self.sendgif = QMovie('Images/send.gif')
+        # self.sendgif.setScaledSize(self.sendLabel.size())
+        # self.sendLabel.setMovie(self.sendgif)
 
-        # receive할 때 나타나는 gif
-        self.send_recv_Label = QLabel(self)
-        self.send_recv_Label.setGeometry(160, 140, 100, 100)
-        self.send_reverse_gif = QMovie('Images/send_reverse.gif')
-        self.send_reverse_gif.setScaledSize(self.send_recv_Label.size())
-        self.send_recv_Label.setMovie(self.send_reverse_gif)
+        # # receive할 때 나타나는 gif
+        # self.send_recv_Label = QLabel(self)
+        # self.send_recv_Label.setGeometry(160, 140, 100, 100)
+        # self.send_reverse_gif = QMovie('Images/send_reverse.gif')
+        # self.send_reverse_gif.setScaledSize(self.send_recv_Label.size())
+        # self.send_recv_Label.setMovie(self.send_reverse_gif)
 
         self.sendTarget = '' # 메시지 보낼 대상
 
@@ -160,6 +160,8 @@ class MyWindow(QWidget):
         self.recvLabel.setPixmap(message_r_scaled_pixmap)
         self.recvLabel.setGeometry(100, 90, 30, 30)
         self.recvLabel.setVisible(False)
+
+        self.message_temp = False
     
     def show_and_hide(self):    #loading gif를 화면에 띄우고 숨기는 함수
         if self.show_gif:
@@ -168,6 +170,9 @@ class MyWindow(QWidget):
         else:
             self.movie.stop()
             self.loading_label.setVisible(False)
+    
+    def moving_animation(self):
+        self.message_anim.start()
 
     def btn_socket_clicked(self):
         if self.count == 0:
@@ -211,10 +216,10 @@ class MyWindow(QWidget):
         try:
             self.sendTarget.send(send_data)
             # 편지가 지나가는 gif 실행
-            self.sendgif.start()
-            self.message_anim.start()
-            QTimer.singleShot(2000, lambda: self.sendLabel.setDisabled(False))
-            QTimer.singleShot(2000, lambda: self.sendgif.stop())
+            # self.sendgif.start()
+            self.message_anim2.start()
+            # QTimer.singleShot(2000, lambda: self.sendLabel.setDisabled(False))
+            # QTimer.singleShot(2000, lambda: self.sendgif.stop())
             self.message_display.append("나: " + temp_str)
         except:
             print("메시지를 전달할 대상이 없습니다.")
@@ -237,11 +242,12 @@ class MyWindow(QWidget):
                     self.hide_client()
                     break
                 
+                self.message_temp = True
                 # self.message_anim.start()
                 # 편지가 오는 gif 실행
-                self.send_reverse_gif.start()
-                QTimer.singleShot(2000, lambda: self.send_recv_Label.setDisabled(False))
-                QTimer.singleShot(2000, lambda: self.send_reverse_gif.stop())
+                # self.send_reverse_gif.start()
+                # QTimer.singleShot(2000, lambda: self.send_recv_Label.setDisabled(False))
+                # QTimer.singleShot(2000, lambda: self.send_reverse_gif.stop())
                 print('>> Received from ' + addr[0], ':', addr[1], data.decode())
                 self.message_display.append("상대방: " + data.decode())
 
@@ -287,7 +293,10 @@ class MyWindow(QWidget):
                         self.socketC_label.setVisible(True)    #문 애니메이션을 위해 door_close는 보이기
                         self.socketO_label.setVisible(False)     #문 애니메이션을 위해 door_open는 숨기기
                     while(len(self.client_sockets) == 1):
-                        pass
+                        if self.message_temp:
+                            print("anim!")
+                            self.moving_animation()
+                            self.message_temp = False
             except Exception as e:
                 print('에러 : ', e)
 
