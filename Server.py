@@ -133,12 +133,25 @@ class MyWindow(QWidget):
         self.message_anim.setEndValue(QPoint(70, 90))
         self.message_anim.setDuration(1500)
 
+        # message가 오는 에니메이션
+        self.message_anim = QPropertyAnimation(self.message_label, b"pos")
+        self.message_anim.setStartValue(QPoint(70, 90))
+        self.message_anim.setEndValue(QPoint(270, 90))
+        self.message_anim.setDuration(1500)
+
         # send 버튼 클릭 시 나타나는 gif
         self.sendLabel = QLabel(self)
         self.sendLabel.setGeometry(160, 140, 100, 100)
-        self.sendgif = QMovie('image/send.gif')
+        self.sendgif = QMovie('Images/send.gif')
         self.sendgif.setScaledSize(self.sendLabel.size())
         self.sendLabel.setMovie(self.sendgif)
+
+        # receive할 때 나타나는 gif
+        self.send_recv_Label = QLabel(self)
+        self.send_recv_Label.setGeometry(160, 140, 100, 100)
+        self.send_reverse_gif = QMovie('Images/send_reverse.gif')
+        self.send_reverse_gif.setScaledSize(self.send_recv_Label.size())
+        self.send_recv_Label.setMovie(self.send_reverse_gif)
 
         self.sendTarget = '' # 메시지 보낼 대상
 
@@ -199,6 +212,7 @@ class MyWindow(QWidget):
             self.sendTarget.send(send_data)
             # 편지가 지나가는 gif 실행
             self.sendgif.start()
+            self.message_anim.start()
             QTimer.singleShot(2000, lambda: self.sendLabel.setDisabled(False))
             QTimer.singleShot(2000, lambda: self.sendgif.stop())
             self.message_display.append("나: " + temp_str)
@@ -223,7 +237,11 @@ class MyWindow(QWidget):
                     self.hide_client()
                     break
                 
-                self.message_anim.start()
+                # self.message_anim.start()
+                # 편지가 오는 gif 실행
+                self.send_reverse_gif.start()
+                QTimer.singleShot(2000, lambda: self.send_recv_Label.setDisabled(False))
+                QTimer.singleShot(2000, lambda: self.send_reverse_gif.stop())
                 print('>> Received from ' + addr[0], ':', addr[1], data.decode())
                 self.message_display.append("상대방: " + data.decode())
 
