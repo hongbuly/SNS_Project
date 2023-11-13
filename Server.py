@@ -114,13 +114,21 @@ class MyWindow(QWidget):
 
         # arrow 아이콘 표시를 위한 QLabel 위젯 생성
         arrow_pixmap = QPixmap('Images/arrow1.png')
-        arrow_scaled_pixmap = arrow_pixmap.scaled(560, 30)  # 원하는 크기로 조절
+        arrow_scaled_pixmap = arrow_pixmap.scaled(200, 30)  # 원하는 크기로 조절
         self.arrow_label = QLabel(self)
         self.arrow_label.setPixmap(arrow_scaled_pixmap)
         self.arrow_label.setGeometry(80, 90, 200, 30)
         self.arrow_label.setVisible(False)
 
-        # message 아이콘 표시를 위한 3개의 QLabel 위젯 생성
+        # arrow 아이콘 표시를 위한 QLabel 위젯 생성
+        arrow2_pixmap = QPixmap('Images/arrow2.png')
+        arrow2_scaled_pixmap = arrow2_pixmap.scaled(200, 30)  # 원하는 크기로 조절
+        self.arrow2_label = QLabel(self)
+        self.arrow2_label.setPixmap(arrow2_scaled_pixmap)
+        self.arrow2_label.setGeometry(80, 90, 200, 30)
+        self.arrow2_label.setVisible(False)
+
+        # message 아이콘 표시를 위한 QLabel 위젯 생성
         message_r_pixmap = QPixmap('Images/msg_r.png')
         message_r_scaled_pixmap = message_r_pixmap.scaled(30, 30)  # 원하는 크기로 조절
         self.message_label = QLabel(self)
@@ -162,6 +170,7 @@ class MyWindow(QWidget):
         self.recvLabel.setVisible(False)
 
         self.message_temp = False
+        self.nonstop = True
     
     def show_and_hide(self):    #loading gif를 화면에 띄우고 숨기는 함수
         if self.show_gif:
@@ -170,9 +179,6 @@ class MyWindow(QWidget):
         else:
             self.movie.stop()
             self.loading_label.setVisible(False)
-    
-    def moving_animation(self):
-        self.message_anim.start()
 
     def btn_socket_clicked(self):
         if self.count == 0:
@@ -217,6 +223,9 @@ class MyWindow(QWidget):
             self.sendTarget.send(send_data)
             # 편지가 지나가는 gif 실행
             # self.sendgif.start()
+            self.arrow_label.setVisible(False)
+            self.arrow2_label.setVisible(True)
+            self.message_label.setVisible(True)
             self.message_anim2.start()
             # QTimer.singleShot(2000, lambda: self.sendLabel.setDisabled(False))
             # QTimer.singleShot(2000, lambda: self.sendgif.stop())
@@ -240,10 +249,15 @@ class MyWindow(QWidget):
                 if not data:
                     print('>> Disconnected by ' + addr[0], ':', addr[1])
                     self.hide_client()
+                    self.nonstop = False
                     break
                 
-                self.message_temp = True
-                # self.message_anim.start()
+                # 메시지가 오는 에니메이션
+                self.arrow2_label.setVisible(False)
+                self.arrow_label.setVisible(True)
+                self.message_label.setVisible(True)
+                self.message_anim.start()
+
                 # 편지가 오는 gif 실행
                 # self.send_reverse_gif.start()
                 # QTimer.singleShot(2000, lambda: self.send_recv_Label.setDisabled(False))
@@ -260,6 +274,7 @@ class MyWindow(QWidget):
             except ConnectionResetError as e:
                 print('>> Disconnected by ' + addr[0], ':', addr[1])
                 self.hide_client()
+                self.nonstop = False
                 break
         
         if client_socket in self.client_sockets:
@@ -267,11 +282,6 @@ class MyWindow(QWidget):
             print('remove client list : ', len(self.client_sockets))
 
         client_socket.close()
-
-    def show_client(self):
-        self.client_label.setVisible(True)
-        self.arrow_label.setVisible(True)
-        self.message_label.setVisible(True)
 
     def btn_waiting_clicked(self):
         if self.count == 3:
@@ -283,20 +293,14 @@ class MyWindow(QWidget):
                     self.client_sockets.append(client_socket)
                     self.sendTarget = client_socket
                     print("참가자 수 : ", len(self.client_sockets))
-                    start_new_thread(self.threaded, (client_socket, addr))
-                    self.show_client()
+
+                    self.show_gif = False   #1개가 연결되면 listen 중지를 표현하기위해
+                    self.show_and_hide()    #loading gif 숨기기
+                    self.socketC_label.setVisible(True)    #문 애니메이션을 위해 door_close는 보이기
+                    self.socketO_label.setVisible(False)     #문 애니메이션을 위해 door_open는 숨기기
                     
-                    # 1개의 Client만 접속 가능
-                    if len(self.client_sockets) == 1:
-                        self.show_gif = False   #1개가 연결되면 listen 중지를 표현하기위해
-                        self.show_and_hide()    #loading gif 숨기기
-                        self.socketC_label.setVisible(True)    #문 애니메이션을 위해 door_close는 보이기
-                        self.socketO_label.setVisible(False)     #문 애니메이션을 위해 door_open는 숨기기
-                    while(len(self.client_sockets) == 1):
-                        if self.message_temp:
-                            print("anim!")
-                            self.moving_animation()
-                            self.message_temp = False
+                    self.client_label.setVisible(True)
+                    self.threaded(client_socket, addr)
             except Exception as e:
                 print('에러 : ', e)
 
