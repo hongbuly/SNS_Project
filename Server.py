@@ -5,13 +5,76 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+bubble_margins = QMargins(15, 5, 35, 5)
+msg_margins = QMargins(20, 15, 20, 15)
+b_margins = bubble_margins * 2
+
+me_color = QColor("#BCE55C") # 나의 말풍선 색
+other_color = QColor("#D5D5D5") # 상대방의 말풍선 색
+
+class make_bubble(QStyledItemDelegate):    
+    def paint(self, painter, option, index):
+        sender, msg = index.model().data(index, Qt.DisplayRole)
+
+        bubble_rect = option.rect.marginsRemoved(bubble_margins)
+        b_rect = option.rect.marginsRemoved(b_margins)
+
+        color = 0
+        point = 0
+        if sender == 'me':
+            color = me_color
+            point = bubble_rect.topRight()
+        else:
+            color = other_color
+            point = bubble_rect.topLeft()
+        
+        painter.setPen(color)
+        painter.setBrush(color)
+        painter.drawRoundedRect(bubble_rect, 2, 2)
+
+
+        painter.drawPolygon(point + QPoint(-20, 0), point + QPoint(20, 0), point + QPoint(0, 20))
+        
+        painter.setPen(Qt.black)
+
+        painter.drawText(b_rect, Qt.TextWordWrap, msg)
+
+    def sizeHint(self, option, index):
+        _, msg = index.model().data(index, Qt.DisplayRole)
+        metrics = QApplication.fontMetrics()
+        rect = option.rect.marginsRemoved(msg_margins)
+        rect = metrics.boundingRect(rect, Qt.TextWordWrap, msg)
+        rect = rect.marginsAdded(msg_margins)
+        return rect.size()
+    
+class msg_model(QAbstractListModel):
+    def __init__(self, *args, **kwargs):
+        super(msg_model, self).__init__(*args, **kwargs)
+        self.messages = []
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            return self.messages[index.row()]
+        
+    def rowCount(self, index):
+        return len(self.messages)
+    
+    def add_msg(self, sender, msg):
+        if msg:
+            self.messages.append((sender, msg))
+            self.layoutChanged.emit()
+
 
 class MyWindow(QWidget):
+    # PyQt 신호를 만들어 메시지를 수신할 때 신호를 발생
+    message_received = pyqtSignal()
+    update_chat = pyqtSignal() # 채팅방 갱신 신호
+    
     def __init__(self):
         super().__init__()
-        # self.setStyleSheet("background-color: white;")
-        self.setGeometry(300, 300, 400, 300)
-        self.setFixedSize(QSize(400, 300))
+        
+        self.setGeometry(300, 300, 800, 300)
+        self.setFixedSize(QSize(800, 300))
         
         self.count = 0
         btn_socket = QPushButton("Socket", self)
@@ -31,11 +94,31 @@ class MyWindow(QWidget):
         hbox.addWidget(self.btn_send)
         hbox.addStretch(1)
 
+        self.message_display = QListView(self)
+        self.message_display.setItemDelegate(make_bubble())
+
+        self.msgModel = msg_model()
+        self.message_display.setModel(self.msgModel)
+
+        # 입력란
+        self.input_box = QLineEdit(self)
+        self.input_box.setPlaceholderText("메시지 입력")
+        self.input_box.returnPressed.connect(self.btn_send_clicked)  # Enter 키로도 메시지 전송 가능
+        
+
         vbox = QVBoxLayout()
         vbox.addStretch(6)
         vbox.addLayout(hbox)
         vbox.addStretch(1)
-        self.setLayout(vbox)
+
+        vbox2 = QVBoxLayout()
+        vbox2.addWidget(self.message_display)
+        vbox2.addWidget(self.input_box)
+
+        hbox2 = QHBoxLayout()
+        hbox2.addLayout(vbox)
+        hbox2.addLayout(vbox2)
+        self.setLayout(hbox2)
         
         self.client_sockets = []
 
@@ -44,7 +127,7 @@ class MyWindow(QWidget):
         self.PORT = 9999
 
         # 서버 아이콘 표시를 위한 QLabel 위젯 생성
-        cloud_pixmap = QPixmap('image/cloud.png')
+        cloud_pixmap = QPixmap('Images/cloud.png')
         cloud_scaled_pixmap = cloud_pixmap.scaled(50, 50)  # 원하는 크기로 조절
         self.server_label = QLabel(self)
         self.server_label.setPixmap(cloud_scaled_pixmap)
@@ -56,14 +139,14 @@ class MyWindow(QWidget):
         self.serverT_label.setGeometry(25, 105, 50, 50)  # 위치 및 크기 조절
         
         # 소켓 아이콘 표시를 위한 QLabel 위젯 생성
-        doorC_pixmap = QPixmap('image/door_close.png')
+        doorC_pixmap = QPixmap('Images/door_close.png')
         doorC_scaled_pixmap = doorC_pixmap.scaled(50, 50)  # 원하는 크기로 조절
         self.socketC_label = QLabel(self)
         self.socketC_label.setPixmap(doorC_scaled_pixmap)
         self.socketC_label.setGeometry(25, 35, 50, 50)
         self.socketC_label.setVisible(False)
 
-        doorO_pixmap = QPixmap('image/door_open.png')
+        doorO_pixmap = QPixmap('Images/door_open.png')
         doorO_scaled_pixmap = doorO_pixmap.scaled(50, 50)  # 원하는 크기로 조절
         self.socketO_label = QLabel(self)
         self.socketO_label.setPixmap(doorO_scaled_pixmap)
@@ -76,100 +159,70 @@ class MyWindow(QWidget):
         #Listen 및 waiting을 할 때 나타날 로딩 gif
         self.loading_label = QLabel(self)
         self.loading_label.setGeometry(0, 140, 100, 50)
-        self.movie = QMovie("image/loading.gif")
+        self.movie = QMovie("Images/loading.gif")
         self.movie.setScaledSize(self.loading_label.size())
         self.loading_label.setMovie(self.movie)
         self.show_gif = False   #초기화면에는 안 보이도록 설정
         self.show_and_hide()    #gif를 보이거나 숨기는 함수
         
-        # Client 아이콘 표시를 위한 3개의 QLabel 위젯 생성
-        client_pixmap = QPixmap('image/client.png')
+        # Client 아이콘 표시를 위한 QLabel 위젯 생성
+        client_pixmap = QPixmap('Images/client.png')
         client_scaled_pixmap = client_pixmap.scaled(40, 40)  # 원하는 크기로 조절
-        self.client_label1 = QLabel(self)
-        self.client_label1.setPixmap(client_scaled_pixmap)
-        self.client_label1.setGeometry(300, 30, 40, 40)
-        # self.client_label1.setVisible(False)
-
-        self.client_label2 = QLabel(self)
-        self.client_label2.setPixmap(client_scaled_pixmap)
-        self.client_label2.setGeometry(300, 80, 40, 40)
-        # self.client_label2.setVisible(False)
-
-        self.client_label3 = QLabel(self)
-        self.client_label3.setPixmap(client_scaled_pixmap)
-        self.client_label3.setGeometry(300, 130, 40, 40)
-        # self.client_label3.setVisible(False)
+        self.client_label = QLabel(self)
+        self.client_label.setPixmap(client_scaled_pixmap)
+        self.client_label.setGeometry(300, 80, 40, 40)
+        self.client_label.setVisible(False)
 
         # Client Text 
         self.serverT_label = QLabel(self)
         self.serverT_label.setText("<b>Client</b>")
         self.serverT_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 가운데 정렬
-        self.serverT_label.setGeometry(295, 160, 50, 50)  # 위치 및 크기 조절
+        self.serverT_label.setGeometry(295, 105, 50, 50)  # 위치 및 크기 조절
 
-        # arrow 아이콘 표시를 위한 3개의 QLabel 위젯 생성
-        arrow_pixmap = QPixmap('image/arrow1.png')
-        arrow_scaled_pixmap = arrow_pixmap.scaled(560, 30)  # 원하는 크기로 조절
-        self.arrow_label1 = QLabel(self)
-        self.arrow_label1.setPixmap(arrow_scaled_pixmap)
-        self.arrow_label1.setGeometry(80, 90, 200, 30)
-        # self.message_label1.setVisible(False)
+        # arrow 아이콘 표시를 위한 QLabel 위젯 생성
+        arrow_pixmap = QPixmap('Images/arrow1.png')
+        arrow_scaled_pixmap = arrow_pixmap.scaled(200, 30)  # 원하는 크기로 조절
+        self.arrow_label = QLabel(self)
+        self.arrow_label.setPixmap(arrow_scaled_pixmap)
+        self.arrow_label.setGeometry(80, 90, 200, 30)
+        self.arrow_label.setVisible(False)
 
-        arrow2_pixmap = QPixmap('image/arrow2.png')
-        arrow2_scaled_pixmap = arrow2_pixmap.scaled(560, 90)  # 원하는 크기로 조절
-        self.arrow_label2 = QLabel(self)
-        self.arrow_label2.setPixmap(arrow2_scaled_pixmap)
-        self.arrow_label2.setGeometry(80, 0, 200, 90)
-        # self.message_label1.setVisible(False)
+        # arrow 아이콘 표시를 위한 QLabel 위젯 생성
+        arrow2_pixmap = QPixmap('Images/arrow2.png')
+        arrow2_scaled_pixmap = arrow2_pixmap.scaled(200, 30)  # 원하는 크기로 조절
+        self.arrow2_label = QLabel(self)
+        self.arrow2_label.setPixmap(arrow2_scaled_pixmap)
+        self.arrow2_label.setGeometry(80, 90, 200, 30)
+        self.arrow2_label.setVisible(False)
 
-        arrow3_pixmap = QPixmap('image/arrow3.png')
-        arrow3_scaled_pixmap = arrow3_pixmap.scaled(560, 90)  # 원하는 크기로 조절
-        self.arrow_label3 = QLabel(self)
-        self.arrow_label3.setPixmap(arrow3_scaled_pixmap)
-        self.arrow_label3.setGeometry(80, 120, 200, 90)
-        # self.message_label1.setVisible(False)
-
-        # message 아이콘 표시를 위한 3개의 QLabel 위젯 생성
-        message_pixmap = QPixmap('image/msg_g.png')
-        message_scaled_pixmap = message_pixmap.scaled(30, 30)  # 원하는 크기로 조절
-        self.message_label1 = QLabel(self)
-        self.message_label1.setPixmap(message_scaled_pixmap)
-        self.message_label1.setGeometry(270, 40, 30, 30)
-        # self.message_label1.setVisible(False)
-
-        message_r_pixmap = QPixmap('image/msg_r.png')
+        # message 아이콘 표시를 위한 QLabel 위젯 생성
+        message_r_pixmap = QPixmap('Images/msg_r.png')
         message_r_scaled_pixmap = message_r_pixmap.scaled(30, 30)  # 원하는 크기로 조절
-        self.message_label2 = QLabel(self)
-        self.message_label2.setPixmap(message_r_scaled_pixmap)
-        self.message_label2.setGeometry(270, 90, 30, 30)
-        # self.message_label2.setVisible(False)
+        self.message_label = QLabel(self)
+        self.message_label.setPixmap(message_r_scaled_pixmap)
+        self.message_label.setGeometry(270, 90, 30, 30)
+        self.message_label.setVisible(False)
 
-        message_y_pixmap = QPixmap('image/msg_y.png')
-        message_y_scaled_pixmap = message_y_pixmap.scaled(30, 30)  # 원하는 크기로 조절
-        self.message_label3 = QLabel(self)
-        self.message_label3.setPixmap(message_y_scaled_pixmap)
-        self.message_label3.setGeometry(270, 140, 30, 30)
-        # self.message_label3.setVisible(False)
+        # message가 오는 에니메이션
+        self.message_anim2 = QPropertyAnimation(self.message_label, b"pos")
+        self.message_anim2.setStartValue(QPoint(70, 90))
+        self.message_anim2.setEndValue(QPoint(270, 90))
+        self.message_anim2.setDuration(1500)
 
-        # send 버튼 클릭 시 나타나는 gif
-        self.sendLabel = QLabel(self)
-        self.sendLabel.setGeometry(160, 140, 100, 100)
-        self.sendgif = QMovie('image/send.gif')
-        self.sendgif.setScaledSize(self.sendLabel.size())
-        self.sendLabel.setMovie(self.sendgif)
-
-        
         self.sendTarget = '' # 메시지 보낼 대상
-
-        self.recvMsg = QLabel(self)
-        self.recvMsg.setFixedSize(200, 50)
-        self.recvMsg.setGeometry(130, 140, 100, 100)
 
         # 서버 쪽 message 아이콘
         self.recvLabel = QLabel(self)
         self.recvLabel.setPixmap(message_r_scaled_pixmap)
         self.recvLabel.setGeometry(100, 90, 30, 30)
         self.recvLabel.setVisible(False)
-        
+
+        self.message_temp = False
+        self.nonstop = True
+
+        #신호를 받을 경우 해당 함수로 연결
+        self.message_received.connect(self.update_message_anim)
+        self.update_chat.connect(self.update_chat_room)
 
     def show_and_hide(self):    #loading gif를 화면에 띄우고 숨기는 함수
         if self.show_gif:
@@ -206,32 +259,54 @@ class MyWindow(QWidget):
             self.show_gif = True
             self.show_and_hide()    #loading gif 화면에 보이기
             start_new_thread(self.btn_waiting_clicked,())   #waiting동안 동시에 loading gif를 보여야 하므로 thread로 분리
-    
 
     def btn_send_clicked(self):
-        self.recvLabel.setVisible(False) # 서버(보내는 사람)쪽 아이콘 안보임
-        self.message_label2.setVisible(True) # 클라이언트(받는 사람)쪽 아이콘 보임
-        
         # send 버튼 짧은 주기로 여러 번 누르는 것 방지. 3초동안 버튼 비활성화
         self.btn_send.setEnabled(False)
         QTimer.singleShot(3000, lambda: self.btn_send.setDisabled(False))
 
         # 클라이언트에게 데이터 보내기
-        temp_str = "server"
+        temp_str = self.input_box.text()
         send_data = bytearray(temp_str, 'utf-8')
         try:
+            self.input_box.clear()
             self.sendTarget.send(send_data)
-            # 편지가 지나가는 gif 실행
-            self.sendgif.start()
-            QTimer.singleShot(2000, lambda: self.sendLabel.setDisabled(False))
-            QTimer.singleShot(2000, lambda: self.sendgif.stop())
+
+            self.arrow_label.setVisible(False)
+            self.arrow2_label.setVisible(True)
+            self.message_label.setVisible(True)
+            self.message_anim2.start()
+
+            # self.message_display.append("나: " + temp_str)
+            self.msgModel.add_msg('me', "나: " + temp_str)
+            self.message_display.scrollToBottom()
         except:
             print("메시지를 전달할 대상이 없습니다.")
-    
 
+    def hide_client(self):
+        self.client_label.setVisible(False)
+        self.arrow_label.setVisible(False)
+        self.message_label.setVisible(False)
+
+    def update_message_anim(self):
+        # 수신된 메시지로 UI를 업데이트하는 슬롯 함수
+        self.arrow2_label.setVisible(False)
+        self.arrow_label.setVisible(True)
+        self.message_label.setVisible(True)
+        # message 이동 에니메이션
+        self.message_anim = QPropertyAnimation(self.message_label, b"pos")
+        self.message_anim.setStartValue(QPoint(270, 90))
+        self.message_anim.setEndValue(QPoint(70, 90))
+        self.message_anim.setDuration(1500)
+        
+        self.message_anim.start()
+
+    def update_chat_room(self):
+        self.msgModel.layoutChanged.emit()
+        self.message_display.scrollToBottom()
+        
     def threaded(self, client_socket, addr):
         print('>> Connected by :', addr[0], ':', addr[1])
-
         ## process until client disconnect ##
         while True:
             try:
@@ -240,13 +315,17 @@ class MyWindow(QWidget):
 
                 if not data:
                     print('>> Disconnected by ' + addr[0], ':', addr[1])
+                    self.hide_client()
+                    self.nonstop = False
                     break
 
                 print('>> Received from ' + addr[0], ':', addr[1], data.decode())
-                self.recvMsg.setText('[받은 메시지]: ' + data.decode())
-                self.recvLabel.setVisible(True)
-                self.message_label2.setVisible(False)
+                self.msgModel.add_msg('other', "상대방: " + data.decode())
 
+                # 단계 3: UI를 업데이트하기 위해 신호를 발생시킵니다.
+                self.message_received.emit()
+                self.update_chat.emit()
+            
                 ## chat to client connecting client ##
                 ## chat to client connecting client except person sending message ##
                 for client in self.client_sockets:
@@ -255,6 +334,8 @@ class MyWindow(QWidget):
             
             except ConnectionResetError as e:
                 print('>> Disconnected by ' + addr[0], ':', addr[1])
+                self.hide_client()
+                self.nonstop = False
                 break
         
         if client_socket in self.client_sockets:
@@ -273,15 +354,15 @@ class MyWindow(QWidget):
                     self.client_sockets.append(client_socket)
                     self.sendTarget = client_socket
                     print("참가자 수 : ", len(self.client_sockets))
-                    start_new_thread(self.threaded, (client_socket, addr))
                     
-                    #최대 3개의 Client만 접속 가능
-                    while len(self.client_sockets) == 3:
-                        self.show_gif = False   #최대 3개가 연결되면 listen 중지를 표현하기위해
-                        self.show_and_hide()    #loading gif 숨기기
-                        self.socketC_label.setVisible(True)    #문 애니메이션을 위해 door_close는 보이기
-                        self.socketO_label.setVisible(False)     #문 애니메이션을 위해 door_open는 숨기기
-                        pass
+                    self.show_gif = False   #1개가 연결되면 listen 중지를 표현하기위해
+                    self.show_and_hide()    #loading gif 숨기기
+                    self.socketC_label.setVisible(True)    #문 애니메이션을 위해 door_close는 보이기
+                    self.socketO_label.setVisible(False)     #문 애니메이션을 위해 door_open는 숨기기
+
+                    self.client_label.setVisible(True)
+                    self.threaded(client_socket, addr)
+                    
             except Exception as e:
                 print('에러 : ', e)
 

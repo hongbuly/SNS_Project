@@ -5,10 +5,71 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+bubble_margins = QMargins(15, 5, 35, 5)
+msg_margins = QMargins(20, 15, 20, 15)
+b_margins = bubble_margins * 2
+
+me_color = QColor("#BCE55C") # 나의 말풍선 색
+other_color = QColor("#D5D5D5") # 상대방의 말풍선 색
+
+class make_bubble(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        sender, msg = index.model().data(index, Qt.DisplayRole)
+
+        bubble_rect = option.rect.marginsRemoved(bubble_margins)
+        b_rect = option.rect.marginsRemoved(b_margins)
+
+        color = 0
+        point = 0
+        if sender == 'me':
+            color = me_color
+            point = bubble_rect.topRight()
+        else:
+            color = other_color
+            point = bubble_rect.topLeft()
+
+        painter.setPen(color)
+        painter.setBrush(color)
+        painter.drawRoundedRect(bubble_rect, 2, 2)
+        
+        painter.drawPolygon(point + QPoint(-20, 0), point + QPoint(20, 0), point + QPoint(0, 20))
+        
+        painter.setPen(Qt.black)
+        
+        painter.drawText(b_rect, Qt.TextWordWrap, msg)
+
+    def sizeHint(self, option, index):
+        _, msg = index.model().data(index, Qt.DisplayRole)
+        metrics = QApplication.fontMetrics()
+        rect = option.rect.marginsRemoved(msg_margins)
+        rect = metrics.boundingRect(rect, Qt.TextWordWrap, msg)
+        rect = rect.marginsAdded(msg_margins)
+        return rect.size()
+    
+class msg_model(QAbstractListModel):
+    def __init__(self, *args, **kwargs):
+        super(msg_model, self).__init__(*args, **kwargs)
+        self.messages = []
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            return self.messages[index.row()]
+        
+    def rowCount(self, index):
+        return len(self.messages)
+    
+    def add_message(self, sender, msg):
+        if msg:
+            self.messages.append((sender, msg))
+            self.layoutChanged.emit()
+
+
 class MyWindow(QWidget):
+    update_chat = pyqtSignal()
+
     def __init__(self):
         super().__init__()
-        # self.setStyleSheet("background-color: white;")
+
         self.setGeometry(300, 300, 400, 300)
         self.setFixedSize(QSize(400, 300))
 
@@ -19,18 +80,22 @@ class MyWindow(QWidget):
         infobox = QHBoxLayout()
         gb = QGroupBox()
         infobox.addWidget(gb)
- 
+
         box = QHBoxLayout()
         label = QLabel('IP : '+ self.HOST)
         box.addWidget(label)
         label = QLabel('Port : '+ str(self.PORT))
         box.addWidget(label)
         
-        gb.setLayout(box)      
+        gb.setLayout(box)
         
         # 메시지 출력란
-        self.message_display = QTextEdit(self)
-        self.message_display.setReadOnly(True)
+        self.message_display = QListView(self)
+        self.message_display.setItemDelegate(make_bubble())
+
+        self.msgModel = msg_model()
+        self.message_display.setModel(self.msgModel)
+
         
         # 입력란
         self.input_box = QLineEdit(self)
@@ -50,13 +115,17 @@ class MyWindow(QWidget):
         hbox.addWidget(self.input_box)
         hbox.addWidget(self.send_button)
         self.setLayout(vbox)
-        
 
+        self.update_chat.connect(self.update_chat_room)
+        
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((self.HOST, self.PORT))
         print('>> Connect Server')
         start_new_thread(self.recv_data, (self.client_socket,))
-        
+
+    def update_chat_room(self):
+        self.msgModel.layoutChanged.emit()
+        self.message_display.scrollToBottom()  
   
     def send_message(self):
         message = self.input_box.text()
@@ -68,7 +137,8 @@ class MyWindow(QWidget):
         try:
             self.client_socket.send(message.encode())
             self.input_box.clear()
-            self.message_display.append("나: " + message)
+            self.msgModel.add_message('me', "나: " + message)
+            self.message_display.scrollToBottom()
             print("메시지 전송 성공:", message)
         except Exception as e:
             print("메시지 전송 실패:", e)
@@ -79,9 +149,12 @@ class MyWindow(QWidget):
             if not data:
                 break
             message = data.decode()
-            self.message_display.append("상대방: " + message)
+            self.msgModel.add_message('other', "상대방: " + message)
+            self.message_display.scrollToBottom()
+            self.update_chat.emit()
             print("recive : ", repr(data.decode()))
-    
+
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
