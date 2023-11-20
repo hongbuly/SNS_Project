@@ -5,13 +5,74 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+class make_bubble(QStyledItemDelegate):
+    bubble_margins = QMargins(15, 5, 35, 5)
+    msg_margins = QMargins(20, 15, 20, 15)
+    b_margins = bubble_margins * 2
+
+    me_color = QColor("#BCE55C") # 나의 말풍선 색
+    other_color = QColor("#D5D5D5") # 상대방의 말풍선 색
+
+    def paint(self, painter, option, index):
+        sender, msg = index.model().data(index, Qt.DisplayRole)
+
+        bubble_rect = option.rect.marginsRemoved(self.bubble_margins)
+        b_rect = option.rect.marginsRemoved(self.b_margins)
+
+        color = 0
+        point = 0
+        if sender == 'me':
+            color = self.me_color
+            point = bubble_rect.topRight()
+        else:
+            color = self.other_color
+            point = bubble_rect.topLeft()
+        
+        painter.setPen(color)
+        painter.setBrush(color)
+        painter.drawRoundedRect(bubble_rect, 2, 2)
+
+
+        painter.drawPolygon(point + QPoint(-20, 0), point + QPoint(20, 0), point + QPoint(0, 20))
+        
+        painter.setPen(Qt.black)
+
+        painter.drawText(b_rect, Qt.TextWordWrap, msg)
+
+    def sizeHint(self, option, index):
+        _, msg = index.model().data(index, Qt.DisplayRole)
+        metrics = QApplication.fontMetrics()
+        rect = option.rect.marginsRemoved(self.msg_margins)
+        rect = metrics.boundingRect(rect, Qt.TextWordWrap, msg)
+        rect = rect.marginsAdded(self.msg_margins)
+        return rect.size()
+    
+class msg_model(QAbstractListModel):
+    def __init__(self, *args, **kwargs):
+        super(msg_model, self).__init__(*args, **kwargs)
+        self.messages = []
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            return self.messages[index.row()]
+        
+    def rowCount(self, index):
+        return len(self.messages)
+    
+    def add_msg(self, sender, msg):
+        if msg:
+            self.messages.append((sender, msg))
+            self.layoutChanged.emit()
+
+
 class MyWindow(QWidget):
     # PyQt 신호를 만들어 메시지를 수신할 때 신호를 발생
     message_received = pyqtSignal()
+    update_chat = pyqtSignal() # 채팅방 갱신 신호
     
     def __init__(self):
         super().__init__()
-        # self.setStyleSheet("background-color: white;")
+        
         self.setGeometry(300, 300, 800, 300)
         self.setFixedSize(QSize(800, 300))
         
@@ -22,20 +83,23 @@ class MyWindow(QWidget):
         btn_bind.clicked.connect(self.btn_bind_clicked)
         btn_listen = QPushButton("Listen", self)
         btn_listen.clicked.connect(self.btn_listen_clicked)
-        btn_send = QPushButton("Send", self)
-        btn_send.clicked.connect(self.btn_send_clicked)
+        self.btn_send = QPushButton("Send", self)
+        self.btn_send.clicked.connect(self.btn_send_clicked)
+        self.btn_send.setDisabled(True) # 클라이언트 연결 전 비활성화
 
         hbox = QHBoxLayout()
         hbox.addStretch(1)
         hbox.addWidget(btn_socket)
         hbox.addWidget(btn_bind)
         hbox.addWidget(btn_listen)
-        hbox.addWidget(btn_send)
+        hbox.addWidget(self.btn_send)
         hbox.addStretch(1)
 
-        # 메시지 출력란
-        self.message_display = QTextEdit(self)
-        self.message_display.setReadOnly(True)
+        self.message_display = QListView(self)
+        self.message_display.setItemDelegate(make_bubble())
+
+        self.msgModel = msg_model()
+        self.message_display.setModel(self.msgModel)
 
         # 입력란
         self.input_box = QLineEdit(self)
@@ -146,20 +210,6 @@ class MyWindow(QWidget):
         self.message_anim2.setEndValue(QPoint(270, 90))
         self.message_anim2.setDuration(1500)
 
-        # # send 버튼 클릭 시 나타나는 gif
-        # self.sendLabel = QLabel(self)
-        # self.sendLabel.setGeometry(160, 140, 100, 100)
-        # self.sendgif = QMovie('Images/send.gif')
-        # self.sendgif.setScaledSize(self.sendLabel.size())
-        # self.sendLabel.setMovie(self.sendgif)
-
-        # # receive할 때 나타나는 gif
-        # self.send_recv_Label = QLabel(self)
-        # self.send_recv_Label.setGeometry(160, 140, 100, 100)
-        # self.send_reverse_gif = QMovie('Images/send_reverse.gif')
-        # self.send_reverse_gif.setScaledSize(self.send_recv_Label.size())
-        # self.send_recv_Label.setMovie(self.send_reverse_gif)
-
         self.sendTarget = '' # 메시지 보낼 대상
 
         # 서버 쪽 message 아이콘
@@ -173,6 +223,7 @@ class MyWindow(QWidget):
 
         #신호를 받을 경우 해당 함수로 연결
         self.message_received.connect(self.update_message_anim)
+        self.update_chat.connect(self.update_chat_room)
 
     def show_and_hide(self):    #loading gif를 화면에 띄우고 숨기는 함수
         if self.show_gif:
@@ -211,9 +262,6 @@ class MyWindow(QWidget):
             start_new_thread(self.btn_waiting_clicked,())   #waiting동안 동시에 loading gif를 보여야 하므로 thread로 분리
 
     def btn_send_clicked(self):
-        # self.recvLabel.setVisible(False) # 서버(보내는 사람)쪽 아이콘 안보임
-        # self.message_label.setVisible(True) # 클라이언트(받는 사람)쪽 아이콘 보임
-
         # send 버튼 짧은 주기로 여러 번 누르는 것 방지. 3초동안 버튼 비활성화
         self.btn_send.setEnabled(False)
         QTimer.singleShot(3000, lambda: self.btn_send.setDisabled(False))
@@ -221,17 +269,20 @@ class MyWindow(QWidget):
         # 클라이언트에게 데이터 보내기
         temp_str = self.input_box.text()
         send_data = bytearray(temp_str, 'utf-8')
+        if len(temp_str) == 0:
+            return
         try:
+            self.input_box.clear()
             self.sendTarget.send(send_data)
-            # 편지가 지나가는 gif 실행
-            # self.sendgif.start()
+
             self.arrow_label.setVisible(False)
             self.arrow2_label.setVisible(True)
             self.message_label.setVisible(True)
             self.message_anim2.start()
-            # QTimer.singleShot(2000, lambda: self.sendLabel.setDisabled(False))
-            # QTimer.singleShot(2000, lambda: self.sendgif.stop())
-            self.message_display.append("나: " + temp_str)
+
+            # self.message_display.append("나: " + temp_str)
+            self.msgModel.add_msg('me', "나: " + temp_str)
+            self.message_display.scrollToBottom()
         except:
             print("메시지를 전달할 대상이 없습니다.")
 
@@ -253,9 +304,13 @@ class MyWindow(QWidget):
         
         self.message_anim.start()
 
+    def update_chat_room(self):
+        self.msgModel.layoutChanged.emit()
+        self.message_display.scrollToBottom()
         
     def threaded(self, client_socket, addr):
         print('>> Connected by :', addr[0], ':', addr[1])
+        self.btn_send.setEnabled(True)
         ## process until client disconnect ##
         while True:
             try:
@@ -268,15 +323,12 @@ class MyWindow(QWidget):
                     self.nonstop = False
                     break
 
-                # 편지가 오는 gif 실행
-                # self.send_reverse_gif.start()
-                # QTimer.singleShot(2000, lambda: self.send_recv_Label.setDisabled(False))
-                # QTimer.singleShot(2000, lambda: self.send_reverse_gif.stop())
                 print('>> Received from ' + addr[0], ':', addr[1], data.decode())
-                self.message_display.append("상대방: " + data.decode())
+                self.msgModel.add_msg('other', "상대방: " + data.decode())
 
                 # 단계 3: UI를 업데이트하기 위해 신호를 발생시킵니다.
                 self.message_received.emit()
+                self.update_chat.emit()
             
                 ## chat to client connecting client ##
                 ## chat to client connecting client except person sending message ##
