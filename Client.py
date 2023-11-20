@@ -5,27 +5,27 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-bubble_margins = QMargins(15, 5, 35, 5)
-msg_margins = QMargins(20, 15, 20, 15)
-b_margins = bubble_margins * 2
-
-me_color = QColor("#BCE55C") # 나의 말풍선 색
-other_color = QColor("#D5D5D5") # 상대방의 말풍선 색
-
 class make_bubble(QStyledItemDelegate):
+    bubble_margins = QMargins(15, 5, 35, 5)
+    msg_margins = QMargins(20, 15, 20, 15)
+    b_margins = bubble_margins * 2
+
+    me_color = QColor("#BCE55C") # 나의 말풍선 색
+    other_color = QColor("#D5D5D5") # 상대방의 말풍선 색
+
     def paint(self, painter, option, index):
         sender, msg = index.model().data(index, Qt.DisplayRole)
 
-        bubble_rect = option.rect.marginsRemoved(bubble_margins)
-        b_rect = option.rect.marginsRemoved(b_margins)
+        bubble_rect = option.rect.marginsRemoved(self.bubble_margins)
+        b_rect = option.rect.marginsRemoved(self.b_margins)
 
         color = 0
         point = 0
         if sender == 'me':
-            color = me_color
+            color = self.me_color
             point = bubble_rect.topRight()
         else:
-            color = other_color
+            color = self.other_color
             point = bubble_rect.topLeft()
 
         painter.setPen(color)
@@ -41,9 +41,9 @@ class make_bubble(QStyledItemDelegate):
     def sizeHint(self, option, index):
         _, msg = index.model().data(index, Qt.DisplayRole)
         metrics = QApplication.fontMetrics()
-        rect = option.rect.marginsRemoved(msg_margins)
+        rect = option.rect.marginsRemoved(self.msg_margins)
         rect = metrics.boundingRect(rect, Qt.TextWordWrap, msg)
-        rect = rect.marginsAdded(msg_margins)
+        rect = rect.marginsAdded(self.msg_margins)
         return rect.size()
     
 class msg_model(QAbstractListModel):
@@ -134,6 +134,9 @@ class MyWindow(QWidget):
             self.client_socket.close()
             QApplication.quit()
             return
+        elif len(message) == 0:
+            return
+        
         try:
             self.client_socket.send(message.encode())
             self.input_box.clear()

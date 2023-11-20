@@ -5,27 +5,27 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
-bubble_margins = QMargins(15, 5, 35, 5)
-msg_margins = QMargins(20, 15, 20, 15)
-b_margins = bubble_margins * 2
+class make_bubble(QStyledItemDelegate):
+    bubble_margins = QMargins(15, 5, 35, 5)
+    msg_margins = QMargins(20, 15, 20, 15)
+    b_margins = bubble_margins * 2
 
-me_color = QColor("#BCE55C") # 나의 말풍선 색
-other_color = QColor("#D5D5D5") # 상대방의 말풍선 색
+    me_color = QColor("#BCE55C") # 나의 말풍선 색
+    other_color = QColor("#D5D5D5") # 상대방의 말풍선 색
 
-class make_bubble(QStyledItemDelegate):    
     def paint(self, painter, option, index):
         sender, msg = index.model().data(index, Qt.DisplayRole)
 
-        bubble_rect = option.rect.marginsRemoved(bubble_margins)
-        b_rect = option.rect.marginsRemoved(b_margins)
+        bubble_rect = option.rect.marginsRemoved(self.bubble_margins)
+        b_rect = option.rect.marginsRemoved(self.b_margins)
 
         color = 0
         point = 0
         if sender == 'me':
-            color = me_color
+            color = self.me_color
             point = bubble_rect.topRight()
         else:
-            color = other_color
+            color = self.other_color
             point = bubble_rect.topLeft()
         
         painter.setPen(color)
@@ -42,9 +42,9 @@ class make_bubble(QStyledItemDelegate):
     def sizeHint(self, option, index):
         _, msg = index.model().data(index, Qt.DisplayRole)
         metrics = QApplication.fontMetrics()
-        rect = option.rect.marginsRemoved(msg_margins)
+        rect = option.rect.marginsRemoved(self.msg_margins)
         rect = metrics.boundingRect(rect, Qt.TextWordWrap, msg)
-        rect = rect.marginsAdded(msg_margins)
+        rect = rect.marginsAdded(self.msg_margins)
         return rect.size()
     
 class msg_model(QAbstractListModel):
@@ -85,6 +85,7 @@ class MyWindow(QWidget):
         btn_listen.clicked.connect(self.btn_listen_clicked)
         self.btn_send = QPushButton("Send", self)
         self.btn_send.clicked.connect(self.btn_send_clicked)
+        self.btn_send.setDisabled(True) # 클라이언트 연결 전 비활성화
 
         hbox = QHBoxLayout()
         hbox.addStretch(1)
@@ -268,6 +269,8 @@ class MyWindow(QWidget):
         # 클라이언트에게 데이터 보내기
         temp_str = self.input_box.text()
         send_data = bytearray(temp_str, 'utf-8')
+        if len(temp_str) == 0:
+            return
         try:
             self.input_box.clear()
             self.sendTarget.send(send_data)
@@ -307,6 +310,7 @@ class MyWindow(QWidget):
         
     def threaded(self, client_socket, addr):
         print('>> Connected by :', addr[0], ':', addr[1])
+        self.btn_send.setEnabled(True)
         ## process until client disconnect ##
         while True:
             try:
